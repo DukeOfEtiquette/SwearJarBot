@@ -36,8 +36,7 @@ bot.on("message", msg => {
   let role = msg.guild.roles.find("name", "bot");
   if(msg.member.roles.has(role.id)){return;}
 
-  var memberId = msg.member.id;
-  
+  var memberId = parseInt(msg.member.id);
 
   //Make entire string is lowercase and remove all spaces
   //Remove spaces is to detect things like f u c k
@@ -62,10 +61,25 @@ bot.on("message", msg => {
     //Debug message
     console.log("numOccur: " + numOccur);
 
-    //Debug message to see a swear word was caught and show
     //how many occurrences were found
     if(numOccur > 0)
     {
+      //See if user has an entry for this word
+
+      var wordId = naughtyWords[i].id;
+
+      //Make call to get naughtyWords
+      selectWordsUttered(memberId, wordId, function(err, data){
+
+        //If there was an error with the select then return, else update/insert entry
+        if(err)
+          return;
+        else
+          updateWordsUttered(memberId, wordId, numOccur, data);
+
+      });
+
+      //Debug message
       msg.channel.sendMessage(naughtyWords[i].word + ": " + numOccur);
     }
   }
@@ -133,11 +147,13 @@ function getNaughtyWords(callback)
       callback(err, null);
       //return;
     }
-    console.log('Connection established.');
+    console.log('Connection for naughty_words query established.');
   });
 
+  var queryStr = "SELECT * FROM naughty_words";
+
   //Select all naughty words from naughtyWords table
-  con.query('SELECT * FROM naughtyWords',function(err,data){
+  con.query(queryStr,function(err,data){
     if(err) throw err;
 
     //Confirmation message
@@ -150,9 +166,82 @@ function getNaughtyWords(callback)
   con.end(function(err){
     if(err) throw err;
 
-    console.log("Connection closed.");
+    console.log("Connection for naughty_words query closed.");
   });
 
 }
 
+function selectWordsUttered(memberId, wordId, callback)
+{
 
+  //Establish a connection to the db
+  con.connect(function(err){
+    if(err){
+      console.log('Error connecting to Db for words_uttered select query.');
+      callback(err, null);
+    }
+    console.log('Connection for words_uttered select query established.');
+  });
+
+  var queryStr = util.format("SELECT * FROM words_uttered WHERE member_id=%s AND word_id=%d", memberId, wordId);
+
+  //Select all entries for memberId in words_uttered table
+  con.query(queryStr, function(err, res){
+    if(err) throw err;
+
+    //Confirmation message
+    console.log('words_uttered select query complete.');
+
+    callback(null, res);
+  });
+
+  //Close connection to db
+  con.end(function(err){
+    if(err) throw err;
+
+    console.log("Connection for words_uttered select query closed.");
+  });
+
+
+}
+
+function updateWordsUttered(memberId, wordId, numOccur, data)
+{
+  //Establish a connection to the db
+  con.connect(function(err){
+    if(err){
+      console.log('Error connecting to Db for words_uttered insert query.');
+      callback(err, null);
+    }
+    console.log('Connection for words_uttered insert query established.');
+  });
+
+  var queryStr = "";
+
+  //This word has already been uttered by this user
+  if(data.length > 0)
+  {
+    //Update occurrences with the new number of occurrences found in recent message
+    queryStr = util.format("UPDATE words_uttered SET occurrences=%d", numOccur + data.occurrences);
+
+  }else{ //Else this is the user's first time using this word
+    //Insert a new entry for this word and user
+    queryStr = util.format("INSERT INTO words_uttered (member_id, word_id, occurrences) VALUES (%d, %d, %d)", memberId, wordId, numOccur);
+  }
+
+  //Execute query
+  con.query(queryStr, function(err, res){
+    if(err) throw err;
+
+    //Confirmation message
+    console.log('words_uttered update/insert query complete.');
+
+  });
+
+  //Close connection to db
+  con.end(function(err){
+    if(err) throw err;
+
+    console.log("Connection for words_uttered insert query closed.");
+  });
+}

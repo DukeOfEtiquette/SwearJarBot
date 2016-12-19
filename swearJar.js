@@ -2,10 +2,10 @@ const Discord = require("discord.js");
 const config = require("./config.json");
 const bot = new Discord.Client();
 
-
+//Init db variable
 var mysql = require("mysql");
-var naughtyWords = require("./words.json");
 
+//Set connection info
 var con = mysql.createConnection({
   host: "localhost",
   user: "root",
@@ -13,60 +13,84 @@ var con = mysql.createConnection({
   database: "swearJar"
 });
 
-con.connect(function(err){
-  if(err){
-    console.log('Error connecting to Db');
-    return;
+//init global naughtyWords variable
+var naughtyWords;
+
+//Make call to get naughtyWords
+getNaughtyWords(function(err, data){
+
+  //If there is an error then log it
+  //else set global variable with data
+  if(err)
+    console.log("uh oh...error refreshing words");
+  else{
+    naughtyWords = data;
   }
-  console.log('Connection established');
+
 });
 
-
+//For every message...
 bot.on("message", msg => {
-  if (msg.content.startsWith("ping")) {
-    msg.channel.sendMessage("pong!");
-  }else if (!msg.content.startsWith("ping")){
     
-    //Prevent bot-ception
-    let role = msg.guild.roles.find("name", "bot");
-    if(msg.member.roles.has(role.id)){return;}
+  //Prevent bot-ception
+  let role = msg.guild.roles.find("name", "bot");
+  if(msg.member.roles.has(role.id)){return;}
 
-    refreshWords();
+  var memberId = msg.member.id;
+  
 
-    //Make entire string lowercase and remove all spaces
-    //Remove spaces is to detect things like f u c k
-    var message = msg.content.toLowerCase().replace(/ /g, '');
-    var charged = 0.0;
+  //Make entire string is lowercase and remove all spaces
+  //Remove spaces is to detect things like f u c k
+  var message = msg.content.toLowerCase().replace(/ /g, '');
+  var charged = 0.0;
 
-    //Iterate through library of naught words and check the user message for them
-    for(var i = 0; i < naughtyWords.naughtyWords.length; i++)
+  //Iterate through library of naught words and check the user message for them
+  for(var i = 0; i < naughtyWords.length; i++)
+  {
+    //Variable to hold # of occurrences for a word
+    var numOccur = 0;
+
+    //Debug message
+    //console.log("Checking " + naughtyWords[i].word + "...");
+
+    //See how often the word is found in the string
+    numOccur = occurrences(message, naughtyWords[i].word);
+
+    //Accumilate the charge
+    charged += numOccur * naughtyWords[i].cost;
+
+    //Debug message
+    console.log("numOccur: " + numOccur);
+
+    //Debug message to see a swear word was caught and show
+    //how many occurrences were found
+    if(numOccur > 0)
     {
-      var num = 0;
-      console.log("Checking " + naughtyWords.naughtyWords[i].word + "...");
-
-      //See how often the word is found in the string
-      num = occurrences(message, naughtyWords.naughtyWords[i].word);
-
-      charged += num * naughtyWords.naughtyWords[i].cost;
-
-      console.log("num: " + num);
-
-      //Test message
-      if(num > 0)
-      {
-        msg.channel.sendMessage(naughtyWords.naughtyWords[i].word + ": " + num);
-      }
+      msg.channel.sendMessage(naughtyWords[i].word + ": " + numOccur);
     }
-
-    msg.channel.sendMessage("That message cost you: $" + charged);
-
   }
+
+  //Debug message to make sure total message charges accumilating correctly
+  msg.channel.sendMessage("That message cost you: $" + charged);
+
 });
 
 bot.on('ready', () => {
+
+  //Debug to make sure all words getting grabbed before bot is ready
+  /*for(var i = 0; i < naughtyWords.length; i++)
+  {
+    //console.log(rows[i].word + ": " + rows[i].cost.toFixed(2));
+    if(naughtyWords[i].cost < 0)
+      console.log(naughtyWords[i].word + ": ($" + naughtyWords[i].cost.toFixed(2)*-1.00 + ")");
+    else
+      console.log(naughtyWords[i].word + ": $" + naughtyWords[i].cost.toFixed(2));
+  }*/
+
   console.log('I am ready!');
 });
 
+//Load login info for server
 bot.login(config.token);
 
 /** Function that count occurrences of a substring in a string;
@@ -98,7 +122,37 @@ function occurrences(string, subString, allowOverlapping) {
     return n;
 }
 
-function refreshWords()
+/*Function that returns a mysql query in a callback
+ */
+function getNaughtyWords(callback)
 {
-  naughtyWords = require("./words.json");
+  //Establish a connection to the db
+  con.connect(function(err){
+    if(err){
+      console.log('Error connecting to Db.');
+      callback(err, null);
+      //return;
+    }
+    console.log('Connection established.');
+  });
+
+  //Select all naughty words from naughtyWords table
+  con.query('SELECT * FROM naughtyWords',function(err,data){
+    if(err) throw err;
+
+    //Confirmation message
+    console.log('Data received from Db...');
+
+    callback(null, data);
+  });
+
+  //Close connection to db
+  con.end(function(err){
+    if(err) throw err;
+
+    console.log("Connection closed.");
+  });
+
 }
+
+

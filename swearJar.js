@@ -1,5 +1,6 @@
 const Discord = require("discord.js");
 const config = require("./config.json");
+const util = require("util");
 const bot = new Discord.Client();
 
 //Init db variable
@@ -36,7 +37,7 @@ bot.on("message", msg => {
   let role = msg.guild.roles.find("name", "bot");
   if(msg.member.roles.has(role.id)){return;}
 
-  var memberId = parseInt(msg.member.id);
+  var memberId = msg.member.user.username;
 
   //Make entire string is lowercase and remove all spaces
   //Remove spaces is to detect things like f u c k
@@ -59,7 +60,7 @@ bot.on("message", msg => {
     charged += numOccur * naughtyWords[i].cost;
 
     //Debug message
-    console.log("numOccur: " + numOccur);
+    //console.log("numOccur: " + numOccur);
 
     //how many occurrences were found
     if(numOccur > 0)
@@ -75,6 +76,7 @@ bot.on("message", msg => {
         if(err)
           return;
         else
+          //TODO(adam): numOccur isn't scoping correctly I think, getting passed as 0
           updateWordsUttered(memberId, wordId, numOccur, data);
 
       });
@@ -150,7 +152,7 @@ function getNaughtyWords(callback)
     console.log('Connection for naughty_words query established.');
   });
 
-  var queryStr = "SELECT * FROM naughty_words";
+  var queryStr = "SELECT * FROM naughty_words;";
 
   //Select all naughty words from naughtyWords table
   con.query(queryStr,function(err,data){
@@ -162,72 +164,83 @@ function getNaughtyWords(callback)
     callback(null, data);
   });
 
-  //Close connection to db
+  /*//Close connection to db
   con.end(function(err){
     if(err) throw err;
 
     console.log("Connection for naughty_words query closed.");
-  });
+  });*/
 
 }
 
 function selectWordsUttered(memberId, wordId, callback)
 {
 
-  //Establish a connection to the db
+  /*//Establish a connection to the db
   con.connect(function(err){
     if(err){
       console.log('Error connecting to Db for words_uttered select query.');
+      throw err;
       callback(err, null);
+    }else{
+      console.log('Connection for words_uttered select query established.');
+
+
+      //Close connection to db
+      con.end(function(err){
+        if(err) throw err;
+
+        console.log("Connection for words_uttered select query closed.");
+      });
+
     }
-    console.log('Connection for words_uttered select query established.');
-  });
 
-  var queryStr = util.format("SELECT * FROM words_uttered WHERE member_id=%s AND word_id=%d", memberId, wordId);
-
-  //Select all entries for memberId in words_uttered table
-  con.query(queryStr, function(err, res){
-    if(err) throw err;
-
-    //Confirmation message
-    console.log('words_uttered select query complete.');
-
-    callback(null, res);
-  });
-
-  //Close connection to db
-  con.end(function(err){
-    if(err) throw err;
-
-    console.log("Connection for words_uttered select query closed.");
-  });
+  });*/
 
 
+      var queryStr = util.format("SELECT * FROM words_uttered WHERE member_name='%s' AND word_id=%d;", memberId, wordId);
+      console.log(queryStr);
+
+      //Select all entries for memberId in words_uttered table
+      con.query(queryStr, function(err, res){
+        if(err) throw err;
+
+        //Confirmation message
+        console.log('words_uttered select query complete.');
+
+        callback(null, res);
+      });
 }
 
 function updateWordsUttered(memberId, wordId, numOccur, data)
 {
-  //Establish a connection to the db
+  /*//Establish a connection to the db
   con.connect(function(err){
     if(err){
       console.log('Error connecting to Db for words_uttered insert query.');
-      callback(err, null);
+      console.log(err);
+      return;
     }
     console.log('Connection for words_uttered insert query established.');
-  });
+  });*/
 
+  console.log("starting update query...");
   var queryStr = "";
 
   //This word has already been uttered by this user
   if(data.length > 0)
   {
+    console.log("Updated! " + (numOccur + data.occurrences));
     //Update occurrences with the new number of occurrences found in recent message
-    queryStr = util.format("UPDATE words_uttered SET occurrences=%d", numOccur + data.occurrences);
+    queryStr = util.format("UPDATE words_uttered SET occurrences=%d;", numOccur + data.occurrences);
 
   }else{ //Else this is the user's first time using this word
     //Insert a new entry for this word and user
-    queryStr = util.format("INSERT INTO words_uttered (member_id, word_id, occurrences) VALUES (%d, %d, %d)", memberId, wordId, numOccur);
+    console.log("New! " + numOccur);
+    queryStr = util.format("INSERT INTO words_uttered (member_name, word_id, occurrences) VALUES ('%s', %d, %d);", memberId, wordId, numOccur);
   }
+
+  console.log(queryStr);
 
   //Execute query
   con.query(queryStr, function(err, res){
@@ -238,10 +251,11 @@ function updateWordsUttered(memberId, wordId, numOccur, data)
 
   });
 
+  /*
   //Close connection to db
   con.end(function(err){
     if(err) throw err;
 
     console.log("Connection for words_uttered insert query closed.");
-  });
+  });*/
 }

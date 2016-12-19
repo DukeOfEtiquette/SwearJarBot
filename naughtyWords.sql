@@ -3,14 +3,14 @@ DROP TABLE `naughty_words`;
 
 CREATE TABLE `naughty_words` (
 	`id` INT AUTO_INCREMENT,
-	`word` VARCHAR(255) NOT NULL UNIQUE,
+	`word` VARCHAR(20) NOT NULL UNIQUE,
 	`cost` FLOAT NOT NULL,
 	PRIMARY KEY (`id`)
 );
 
 CREATE TABLE `words_uttered` (
 	`id` INT AUTO_INCREMENT,
-	`member_id` INT NOT NULL,
+	`member_name` VARCHAR(255) NOT NULL,
 	`word_id` INT NOT NULL,
 	`occurrences` INT NOT NULL,
 	PRIMARY KEY (`id`)

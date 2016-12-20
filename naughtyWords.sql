@@ -45,7 +45,7 @@ INSERT INTO naughty_words (word, cost) VALUES ("jagoff", 0.35);
 INSERT INTO naughty_words (word, cost) VALUES ("fucka", 0.27);
 INSERT INTO naughty_words (word, cost) VALUES ("nigger", 1.00);
 INSERT INTO naughty_words (word, cost) VALUES ("nigga", 1.50);
-INSERT INTO naughty_words (word, cost) VALUES ("penis", 1.00);
+INSERT INTO naughty_words (word, cost) VALUES ("penis", -1.00);
 INSERT INTO naughty_words (word, cost) VALUES ("poon", 0.75);
 INSERT INTO naughty_words (word, cost) VALUES ("prick", 0.80);
 INSERT INTO naughty_words (word, cost) VALUES ("pussy", 0.60);

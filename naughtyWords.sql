@@ -42,7 +42,6 @@ INSERT INTO naughty_words (word, cost) VALUES ("guido", -0.05);
 INSERT INTO naughty_words (word, cost) VALUES ("homo", 0.99);
 INSERT INTO naughty_words (word, cost) VALUES ("hoe", 0.15);
 INSERT INTO naughty_words (word, cost) VALUES ("jagoff", 0.35);
-INSERT INTO naughty_words (word, cost) VALUES ("fucka", 0.27);
 INSERT INTO naughty_words (word, cost) VALUES ("nigger", 1.00);
 INSERT INTO naughty_words (word, cost) VALUES ("nigga", 1.50);
 INSERT INTO naughty_words (word, cost) VALUES ("penis", -1.00);

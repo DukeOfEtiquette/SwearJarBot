@@ -47,49 +47,23 @@ bot.on("message", msg => {
   //Iterate through library of naught words and check the user message for them
   for(var i = 0; i < naughtyWords.length; i++)
   {
+    checkForWordInMessage(message, memberId, i, function(amt){
+      charged += amt;
+
+    });
+
     //Variable to hold # of occurrences for a word
-    var numOccur = 0;
+    //var numOccur = 0;
 
     //Debug message
     //console.log("Checking " + naughtyWords[i].word + "...");
-
-    //See how often the word is found in the string
-    numOccur = occurrences(message, naughtyWords[i].word);
-
-    //Accumilate the charge
-    charged += numOccur * naughtyWords[i].cost;
-
-    //Debug message
-    //console.log("numOccur: " + numOccur);
-
-    //how many occurrences were found
-    if(numOccur > 0)
-    {
-      //See if user has an entry for this word
-
-      var wordId = naughtyWords[i].id;
-
-      //Make call to get naughtyWords
-      selectWordsUttered(memberId, wordId, function(err, data){
-
-        //If there was an error with the select then return, else update/insert entry
-        if(err)
-          return;
-        else
-          //TODO(adam): numOccur isn't scoping correctly I think, getting passed as 0
-          updateWordsUttered(memberId, wordId, numOccur, data);
-
-      });
-
-      //Debug message
-      msg.channel.sendMessage(naughtyWords[i].word + ": " + numOccur);
-    }
   }
 
   //Debug message to make sure total message charges accumilating correctly
   msg.channel.sendMessage("That message cost you: $" + charged);
 
 });
+
 
 bot.on('ready', () => {
 
@@ -173,6 +147,41 @@ function getNaughtyWords(callback)
 
 }
 
+function checkForWordInMessage(message, memberId, idx, callback)
+{
+    //See how often the word is found in the string
+    var numOccur = occurrences(message, naughtyWords[idx].word);
+
+    //Accumilate the charge
+    var amt = numOccur * naughtyWords[idx].cost;
+
+    //Debug message
+    //console.log("numOccur: " + numOccur);
+
+    //how many occurrences were found
+    if(numOccur > 0)
+    {
+      //See if user has an entry for this word
+      var wordId = naughtyWords[idx].id;
+
+      //Make call to get naughtyWords
+      selectWordsUttered(memberId, wordId, function(err, data){
+
+        //If there was an error with the select then return, else update/insert entry
+        if(err)
+          return;
+        else
+          //TODO(adam): numOccur isn't scoping correctly I think, getting passed as 0
+          updateWordsUttered(memberId, wordId, numOccur, data);
+
+      });
+
+    }
+
+  callback(amt);
+
+}
+
 function selectWordsUttered(memberId, wordId, callback)
 {
 
@@ -224,20 +233,25 @@ function updateWordsUttered(memberId, wordId, numOccur, data)
     console.log('Connection for words_uttered insert query established.');
   });*/
 
-  console.log("starting update query...");
+  //If data is undefined then just use numOccur, else include data's occurrences
+  var n = 0;
+  if(data.length > 0)
+    n = numOccur + data[0].occurrences;
+  else
+    n = numOccur;
+  console.log('hey');
+
   var queryStr = "";
 
   //This word has already been uttered by this user
   if(data.length > 0)
   {
-    console.log("Updated! " + (numOccur + data.occurrences));
     //Update occurrences with the new number of occurrences found in recent message
-    queryStr = util.format("UPDATE words_uttered SET occurrences=%d;", numOccur + data.occurrences);
+    queryStr = util.format("UPDATE words_uttered SET occurrences=%d;", n);
 
   }else{ //Else this is the user's first time using this word
     //Insert a new entry for this word and user
-    console.log("New! " + numOccur);
-    queryStr = util.format("INSERT INTO words_uttered (member_name, word_id, occurrences) VALUES ('%s', %d, %d);", memberId, wordId, numOccur);
+    queryStr = util.format("INSERT INTO words_uttered (member_name, word_id, occurrences) VALUES ('%s', %d, %d);", memberId, wordId, n);
   }
 
   console.log(queryStr);

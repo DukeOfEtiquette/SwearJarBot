@@ -37,47 +37,138 @@ bot.on("message", msg => {
   let role = msg.guild.roles.find("name", "bot");
   if(msg.member.roles.has(role.id)){return;}
 
-  var memberId = msg.member.user.username;
-
   //Make entire string is lowercase and remove all spaces
   //Remove spaces is to detect things like f u c k
   var message = msg.content.toLowerCase().replace(/ /g, '');
-  var charged = 0.0;
+
+  //Grab who sent the message
+  var memberId = msg.member.user.username;
 
   //Iterate through library of naught words and check the user message for them
   for(var i = 0; i < naughtyWords.length; i++)
   {
-    checkForWordInMessage(message, memberId, i, function(amt){
-      charged += amt;
+    //Save target naughty word and it's id in local variables
+    var tarWord = naughtyWords[i].word;
+    var wordId = naughtyWords[i].id;
 
-    });
+    //Check if the target naughty word is in the message
+    checkForNaughtyWord(message, tarWord, memberId, wordId).then(function(data){
 
-    //Variable to hold # of occurrences for a word
-    //var numOccur = 0;
-
-    //Debug message
-    //console.log("Checking " + naughtyWords[i].word + "...");
+      //If it was in the message then select that entry for that word and member
+      return selectWordsUttered(data);
+    }).then(function(data){
+      
+      //And update the number of occurrences for that word and member
+      return updateWordsUttered(data);
+    })
   }
 
-  //Debug message to make sure total message charges accumilating correctly
-  msg.channel.sendMessage("That message cost you: $" + charged);
-
 });
+
+let checkForNaughtyWord = function(message, word, memberId, wordId){
+
+  //selectWordsUttered is dependent on this executing, also only want this function to execute one at a time
+  return new Promise(function(resolve, reject){
+    //See how often the word is found in the string
+    var numOccur = occurrences(message, word);
+
+    //If the word was found then resolve, else reject
+    if(numOccur > 0){
+      
+      //If the target word was found then construct a key/value
+      //array to hold all pertinent info for the select
+      //and update queries
+      var data = {"msg" : message, 
+                  "tarWord" : word, 
+                  "numOccur" : numOccur,
+                  "memberId" : memberId,
+                  "wordId" : wordId
+      };
+
+      //Send that data up
+      resolve(data);
+    }
+    else
+      reject();
+  }); //End of Promise
+}; //End of variable
+
+let selectWordsUttered = function(data){
+
+  //This function is dependent on checkForNaughtyWord and updateWordsUttered is depend on this function
+  return new Promise(function(resolve, reject){
+
+    //Construct query string
+    var queryStr = util.format("SELECT * FROM words_uttered WHERE member_name='%s' AND word_id=%d;", data["memberId"], data["wordId"]);
+
+    //Debug message
+    //console.log(queryStr);
+
+    //Select all entries for memberId in words_uttered table
+    con.query(queryStr, function(err, res){
+      if(err) {
+        throw err;
+        reject();
+      }else{
+        //Confirmation message
+        console.log('words_uttered select query complete.');
+        data["res"] = res;
+
+        //Return data for use in updateWordsUttered
+        resolve(data);
+      }
+    }); //End of con.query
+  }); //End of Promise
+}; //End of variable
+
+
+let updateWordsUttered = function(data){
+
+  //This function will just return a promise since this function is a dependency of selectWordsUttered
+  return new Promise(function(resolve, reject){
+
+    //If data is undefined then just use numOccur, else include data's occurrences
+    var n = 0;
+    if(data["res"].length > 0)
+      n = data["numOccur"] + data["res"][0].occurrences;
+    else
+      n = data["numOccur"];
+
+    var queryStr = "";
+
+    //This word has already been uttered by this user
+    if(data["res"].length > 0)
+    {
+      //Update occurrences with the new number of occurrences found in recent message
+      queryStr = util.format("UPDATE words_uttered SET occurrences=%d WHERE word_id=%d;", n, data["wordId"]);
+
+    }else{ //Else this is the user's first time using this word
+      //Insert a new entry for this word and user
+      queryStr = util.format("INSERT INTO words_uttered (member_name, word_id, occurrences) VALUES ('%s', %d, %d);", data["memberId"], data["wordId"], n);
+    }
+
+    //Debug message
+    //console.log(queryStr);
+
+    //Execute query
+    con.query(queryStr, function(err, res){
+      if(err) {
+        throw err;
+        reject();
+      }else{
+        //Confirmation message
+        console.log('words_uttered update/insert query complete.');
+        resolve();
+      }
+    }); //End of con.query
+  }); //End of promise
+}; //End of variable
 
 
 bot.on('ready', () => {
 
-  //Debug to make sure all words getting grabbed before bot is ready
-  /*for(var i = 0; i < naughtyWords.length; i++)
-  {
-    //console.log(rows[i].word + ": " + rows[i].cost.toFixed(2));
-    if(naughtyWords[i].cost < 0)
-      console.log(naughtyWords[i].word + ": ($" + naughtyWords[i].cost.toFixed(2)*-1.00 + ")");
-    else
-      console.log(naughtyWords[i].word + ": $" + naughtyWords[i].cost.toFixed(2));
-  }*/
-
-  console.log('I am ready!');
+  //Simple message to notify console the bot is ready
+  console.log('Fuckin\' SwearJar is online!');
 });
 
 //Load login info for server
@@ -118,158 +209,30 @@ function getNaughtyWords(callback)
 {
   //Establish a connection to the db
   con.connect(function(err){
+    
+    //Notify console of an error
     if(err){
       console.log('Error connecting to Db.');
       callback(err, null);
-      //return;
     }
+    
+    //If no error, print confirmation message
     console.log('Connection for naughty_words query established.');
   });
 
+  //Construct query string
   var queryStr = "SELECT * FROM naughty_words;";
 
-  //Select all naughty words from naughtyWords table
+  //Select all naughty words from naughty_words table
   con.query(queryStr,function(err,data){
+
+    //Throw an error if trouble was encountered
     if(err) throw err;
 
     //Confirmation message
     console.log('Data received from Db...');
 
+    //Send back all them naughty, naughty words
     callback(null, data);
   });
-
-  /*//Close connection to db
-  con.end(function(err){
-    if(err) throw err;
-
-    console.log("Connection for naughty_words query closed.");
-  });*/
-
-}
-
-function checkForWordInMessage(message, memberId, idx, callback)
-{
-    //See how often the word is found in the string
-    var numOccur = occurrences(message, naughtyWords[idx].word);
-
-    //Accumilate the charge
-    var amt = numOccur * naughtyWords[idx].cost;
-
-    //Debug message
-    //console.log("numOccur: " + numOccur);
-
-    //how many occurrences were found
-    if(numOccur > 0)
-    {
-      //See if user has an entry for this word
-      var wordId = naughtyWords[idx].id;
-
-      //Make call to get naughtyWords
-      selectWordsUttered(memberId, wordId, function(err, data){
-
-        //If there was an error with the select then return, else update/insert entry
-        if(err)
-          return;
-        else
-          //TODO(adam): numOccur isn't scoping correctly I think, getting passed as 0
-          updateWordsUttered(memberId, wordId, numOccur, data);
-
-      });
-
-    }
-
-  callback(amt);
-
-}
-
-function selectWordsUttered(memberId, wordId, callback)
-{
-
-  /*//Establish a connection to the db
-  con.connect(function(err){
-    if(err){
-      console.log('Error connecting to Db for words_uttered select query.');
-      throw err;
-      callback(err, null);
-    }else{
-      console.log('Connection for words_uttered select query established.');
-
-
-      //Close connection to db
-      con.end(function(err){
-        if(err) throw err;
-
-        console.log("Connection for words_uttered select query closed.");
-      });
-
-    }
-
-  });*/
-
-
-      var queryStr = util.format("SELECT * FROM words_uttered WHERE member_name='%s' AND word_id=%d;", memberId, wordId);
-      console.log(queryStr);
-
-      //Select all entries for memberId in words_uttered table
-      con.query(queryStr, function(err, res){
-        if(err) throw err;
-
-        //Confirmation message
-        console.log('words_uttered select query complete.');
-
-        callback(null, res);
-      });
-}
-
-function updateWordsUttered(memberId, wordId, numOccur, data)
-{
-  /*//Establish a connection to the db
-  con.connect(function(err){
-    if(err){
-      console.log('Error connecting to Db for words_uttered insert query.');
-      console.log(err);
-      return;
-    }
-    console.log('Connection for words_uttered insert query established.');
-  });*/
-
-  //If data is undefined then just use numOccur, else include data's occurrences
-  var n = 0;
-  if(data.length > 0)
-    n = numOccur + data[0].occurrences;
-  else
-    n = numOccur;
-  console.log('hey');
-
-  var queryStr = "";
-
-  //This word has already been uttered by this user
-  if(data.length > 0)
-  {
-    //Update occurrences with the new number of occurrences found in recent message
-    queryStr = util.format("UPDATE words_uttered SET occurrences=%d;", n);
-
-  }else{ //Else this is the user's first time using this word
-    //Insert a new entry for this word and user
-    queryStr = util.format("INSERT INTO words_uttered (member_name, word_id, occurrences) VALUES ('%s', %d, %d);", memberId, wordId, n);
-  }
-
-  console.log(queryStr);
-
-  //Execute query
-  con.query(queryStr, function(err, res){
-    if(err) throw err;
-
-    //Confirmation message
-    console.log('words_uttered update/insert query complete.');
-
-  });
-
-  /*
-  //Close connection to db
-  con.end(function(err){
-    if(err) throw err;
-
-    console.log("Connection for words_uttered insert query closed.");
-  });*/
 }
